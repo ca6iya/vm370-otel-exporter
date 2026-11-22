@@ -1,0 +1,1 @@
+Storage size = 16384 K, Nucleus = 336 K, Dynamic Paging = 14788 K, Trace Table = 240 K, Free Storage = 1020 K, Virtual=Real = 0 K
