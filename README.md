@@ -36,7 +36,7 @@ with an underscore, appends a unit suffix, and appends `_total` on counters.
 | `RES-`, `WS-` | `zvm.vm370.guest.pages.resident`, `.working_set` | gauge | pages |
 | `VTIME=mmm:ss`, `TTIME=mmm:ss` | `zvm.vm370.guest.vtime`, `.ttime` | counter | seconds (`minutes * 60 + seconds`), only when the field is `mmm:ss` |
 | `SIO=`, `RDR-`, `PRT-`, `PCH-` | `zvm.vm370.guest.sio`, `.rdr`, `.prt`, `.pch` | counter | printed count |
-| `DISK-`, `DRUM-` | `zvm.vm370.paging.disk`, `.drum` | counter | pages |
+| `DISK-`, `DRUM-` | `zvm.vm370.paging.disk`, `.drum` | gauge | pages allocated when INDICATE runs |
 | `QUERY NAMES` `WAKEUP - DSC` | `zvm.vm370.guest.info` | gauge | `1`, attributes userid and terminal |
 | IPL `Storage size = N K` and the nucleus, dynamic paging, trace table, free storage, and virtual=real fields | `zvm.vm370.storage.size`, `.nucleus`, `.dynamic_paging`, `.trace_table`, `.free`, `.virtual_real` | gauge | `N * 1024` bytes |
 
@@ -44,7 +44,9 @@ with an underscore, appends a unit suffix, and appends `_total` on counters.
 same percent under another name. This exporter does not use that name.
 
 `READS=` and `WRITES=` stay cumulative page counters. They are not divided
-into a per-second rate. `RATIO` stays the printed factor.
+into a per-second rate. `RATIO` stays the printed factor. `DISK-` and
+`DRUM-` are the pages allocated at that moment, so a later sample can be
+lower.
 
 `VTIME=1:02:03` and `TTIME=00:00:00` do not match `mmm:ss`, so those fields
 are skipped.
@@ -85,8 +87,11 @@ python -m vm370_otel_exporter --catalog
 ```
 
 The server binds `127.0.0.1:9370` and answers `GET /metrics`. Any other
-listen address is rejected. Pass `--otlp http://127.0.0.1:4318` to also push
-OTLP/HTTP. `--otlp-protocol grpc` selects OTLP/gRPC. Omit `--otlp` and the
+listen address is rejected. Pass `--otlp http://127.0.0.1:4318` to push
+OTLP/HTTP to a local collector. A schemeless address uses TLS. `--otlp-protocol grpc`
+selects OTLP/gRPC. `--otlp-insecure` selects plaintext and is refused when
+`OTEL_EXPORTER_OTLP_HEADERS` or `OTEL_EXPORTER_OTLP_METRICS_HEADERS` is set.
+An https export does not follow a redirect onto http. Omit `--otlp` and the
 process does not open an OTLP connection.
 
 Prometheus scrape:

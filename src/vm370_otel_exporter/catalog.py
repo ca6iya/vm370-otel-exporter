@@ -86,15 +86,15 @@ CATALOG: dict[str, MetricDef] = {
             "{page}",
             USER,
         ),
-        _c(
+        _g(
             "zvm.vm370.paging.disk",
-            "Cumulative pages from VM/370 INDICATE USER DISK- for one userid.",
+            "Pages on disk for one userid when INDICATE USER runs. A later sample can be lower.",
             "{page}",
             USER,
         ),
-        _c(
+        _g(
             "zvm.vm370.paging.drum",
-            "Cumulative pages from VM/370 INDICATE USER DRUM- for one userid.",
+            "Pages on drum for one userid when INDICATE USER runs. A later sample can be lower.",
             "{page}",
             USER,
         ),

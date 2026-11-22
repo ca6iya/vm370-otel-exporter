@@ -25,6 +25,9 @@ reviews:
         STORAGE-nnn% is zvm.vm370.storage.utilization, real storage as a ratio.
         Do not name that series steal.
         READS= and WRITES= are cumulative page counters, not a per-second rate.
+        DISK- and DRUM- are gauges of pages allocated when INDICATE runs.
+        A schemeless OTLP endpoint uses TLS. Do not send credential headers
+        over plaintext, and do not follow an https redirect onto http.
         RATIO is the printed factor, not a rate.
         VTIME and TTIME become seconds only when the field is mmm:ss.
         IPL sizes are gauges in bytes, K times 1024.

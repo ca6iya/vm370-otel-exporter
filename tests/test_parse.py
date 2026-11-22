@@ -130,6 +130,24 @@ def test_clock_form_and_userid_do_not_leak() -> None:
     assert ("zvm.vm370.paging.reads", "WAKEUP") not in names
 
 
+def test_disk_and_drum_allocation_can_decrease() -> None:
+    user = {"zvm.vm370.userid": "WAKEUP"}
+    higher = parse_text(
+        "ind user WAKEUP\n"
+        "PAGES: RES-0001 WS-0001 READS=000010 WRITES=000001 DISK-0007 DRUM-0004"
+    )
+    lower = parse_text(
+        "ind user WAKEUP\n"
+        "PAGES: RES-0001 WS-0001 READS=000012 WRITES=000001 DISK-0004 DRUM-0002"
+    )
+    assert one(higher, "zvm.vm370.paging.disk", **user).value == 7
+    assert one(lower, "zvm.vm370.paging.disk", **user).value == 4
+    assert one(higher, "zvm.vm370.paging.drum", **user).value == 4
+    assert one(lower, "zvm.vm370.paging.drum", **user).value == 2
+    assert one(lower, "zvm.vm370.paging.reads", **user).value == 12
+    assert one(lower, "zvm.vm370.paging.writes", **user).value == 1
+
+
 def test_percent_and_ratio_edges() -> None:
     snapshot = parse_text("CPU-100%  APU-000%  Q1-03  Q2-10  STORAGE-100%  RATIO-02.5")
     assert one(snapshot, "zvm.vm370.cpu.utilization").value == 1

@@ -5,10 +5,12 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 
+import requests
 from opentelemetry.metrics import CallbackOptions, Observation
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader, MetricReader
@@ -20,6 +22,32 @@ from vm370_otel_exporter.models import Snapshot
 
 SCOPE_NAME = "vm370-otel-exporter"
 _IDENTITY_KEYS = ("zvm.hypervisor", "zvm.system.name", "zvm.exporter.guest", "host.arch")
+_CREDENTIAL_ENVS = (
+    "OTEL_EXPORTER_OTLP_HEADERS",
+    "OTEL_EXPORTER_OTLP_METRICS_HEADERS",
+)
+_SAFE_HTTP_HEADERS = frozenset(
+    {"accept", "content-encoding", "content-length", "content-type", "user-agent"}
+)
+
+
+class OtlpSecurityError(ValueError):
+    """The OTLP target would send credentials in cleartext."""
+
+
+class _NoDowngradeSession(requests.Session):
+    """Refuse an https export that redirects onto http."""
+
+    def rebuild_auth(self, prepared_request, response):  # noqa: ANN001
+        new_url = (prepared_request.url or "").lower()
+        old_url = (getattr(response, "url", "") or "").lower()
+        if new_url.startswith("http://") and old_url.startswith("https://"):
+            raise OtlpSecurityError("refusing to follow an OTLP redirect from https to http")
+        super().rebuild_auth(prepared_request, response)
+        if new_url.startswith("http://"):
+            for name in list(prepared_request.headers):
+                if name.lower() not in _SAFE_HTTP_HEADERS:
+                    del prepared_request.headers[name]
 
 
 @dataclass
@@ -82,23 +110,43 @@ def collect_in_memory(snapshot: Snapshot) -> tuple[MeterProvider, InMemoryMetric
     return provider, reader
 
 
-def metrics_endpoint(endpoint: str, protocol: str) -> str:
-    """Normalize an OTLP endpoint.
+def _credential_headers_configured() -> bool:
+    return any(os.environ.get(name, "").strip() for name in _CREDENTIAL_ENVS)
 
-    HTTP exporters need ``/v1/metrics``. gRPC endpoints gain an ``http://``
-    scheme when the caller passed host:port.
+
+def prepare_otlp_export(endpoint: str, protocol: str, *, insecure: bool) -> tuple[str, bool]:
+    """Return the export URL and whether that channel is plaintext.
+
+    A schemeless address uses TLS. ``insecure`` or an explicit ``http://``
+    URL selects plaintext, and plaintext is refused when credential headers
+    or URL userinfo are present.
     """
 
     raw = endpoint.strip()
     if "://" not in raw:
-        raw = "http://" + raw
-    if protocol == "grpc":
-        return raw
+        raw = ("http://" if insecure else "https://") + raw
     parts = urlsplit(raw)
-    path = parts.path.rstrip("/")
-    if not path.endswith("/v1/metrics"):
-        path = f"{path}/v1/metrics" if path else "/v1/metrics"
-    return urlunsplit((parts.scheme, parts.netloc, path, parts.query, ""))
+    scheme = parts.scheme.lower()
+    if scheme not in {"http", "https"}:
+        raise OtlpSecurityError(f"unsupported OTLP scheme {scheme}")
+    if insecure and scheme == "https":
+        scheme = "http"
+    plaintext = insecure or scheme == "http"
+    if plaintext and (parts.username or parts.password or _credential_headers_configured()):
+        raise OtlpSecurityError("refusing to send OTLP credentials over plaintext")
+    path = parts.path
+    if protocol != "grpc":
+        path = path.rstrip("/")
+        if not path.endswith("/v1/metrics"):
+            path = f"{path}/v1/metrics" if path else "/v1/metrics"
+    return urlunsplit((scheme, parts.netloc, path, parts.query, "")), plaintext
+
+
+def metrics_endpoint(endpoint: str, protocol: str, *, insecure: bool = False) -> str:
+    """Normalize an OTLP endpoint. HTTP exporters need ``/v1/metrics``."""
+
+    url, _plaintext = prepare_otlp_export(endpoint, protocol, insecure=insecure)
+    return url
 
 
 def start_otlp(
@@ -112,7 +160,7 @@ def start_otlp(
 ) -> OtelRuntime:
     """Push the snapshot on an OTLP metric reader."""
 
-    target = metrics_endpoint(endpoint, protocol)
+    target, plaintext = prepare_otlp_export(endpoint, protocol, insecure=insecure)
     if protocol == "grpc":
         from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
             OTLPMetricExporter as GrpcExporter,
@@ -120,7 +168,7 @@ def start_otlp(
 
         exporter = GrpcExporter(
             endpoint=target,
-            insecure=insecure or target.startswith("http://"),
+            insecure=plaintext,
             timeout=timeout,
         )
     else:
@@ -128,7 +176,11 @@ def start_otlp(
             OTLPMetricExporter as HttpExporter,
         )
 
-        exporter = HttpExporter(endpoint=target, timeout=timeout)
+        exporter = HttpExporter(
+            endpoint=target,
+            timeout=timeout,
+            session=_NoDowngradeSession(),
+        )
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 
     reader = PeriodicExportingMetricReader(exporter, export_interval_millis=export_interval_ms)

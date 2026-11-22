@@ -57,6 +57,16 @@ def test_storage_percent_is_not_named_steal() -> None:
     assert "steal" not in prometheus_name(defn)
 
 
+def test_disk_and_drum_are_allocation_gauges() -> None:
+    for name in ("zvm.vm370.paging.disk", "zvm.vm370.paging.drum"):
+        defn = CATALOG[name]
+        assert defn.type == "gauge"
+        assert defn.unit == "{page}"
+        assert not prometheus_name(defn).endswith("_total")
+    assert CATALOG["zvm.vm370.paging.reads"].type == "counter"
+    assert CATALOG["zvm.vm370.paging.writes"].type == "counter"
+
+
 def test_reads_is_a_cumulative_counter() -> None:
     defn = CATALOG["zvm.vm370.paging.reads"]
     assert defn.type == "counter"

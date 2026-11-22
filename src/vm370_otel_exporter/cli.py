@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from vm370_otel_exporter.catalog import CATALOG
-from vm370_otel_exporter.otel import start_otlp
+from vm370_otel_exporter.otel import OtlpSecurityError, start_otlp
 from vm370_otel_exporter.parse import parse_text
 from vm370_otel_exporter.prometheus import render_prometheus
 from vm370_otel_exporter.server import DEFAULT_HOST, DEFAULT_PORT, ListenError, make_server
@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--otlp-insecure",
         action="store_true",
-        help="Allow plaintext gRPC. HTTP endpoints are already plaintext when the URL says so.",
+        help="Use a plaintext OTLP channel. Refused when credential headers are set.",
     )
     return parser
 
@@ -63,12 +63,16 @@ def main(argv: list[str] | None = None) -> int:
     snapshot = parse_text(text)
     runtime = None
     if args.otlp:
-        runtime = start_otlp(
-            args.otlp,
-            args.otlp_protocol,
-            snapshot,
-            insecure=args.otlp_insecure,
-        )
+        try:
+            runtime = start_otlp(
+                args.otlp,
+                args.otlp_protocol,
+                snapshot,
+                insecure=args.otlp_insecure,
+            )
+        except OtlpSecurityError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
     try:
         if args.once:
             sys.stdout.buffer.write(render_prometheus(snapshot))
