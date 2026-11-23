@@ -94,11 +94,11 @@ def test_plaintext_session_ignores_netrc(tmp_path, monkeypatch) -> None:
     netrc.write_text("machine 127.0.0.1 login user password secret\n", encoding="utf-8")
     netrc.chmod(0o600)
     monkeypatch.setenv("NETRC", str(netrc))
-    session = _export_session(plaintext=True)
+    session = _export_session(plaintext=True, endpoint="http://127.0.0.1:4318/v1/metrics")
     prepared = session.prepare_request(requests.Request("POST", "http://127.0.0.1:4318/v1/metrics"))
     assert session.trust_env is False
     assert "Authorization" not in prepared.headers
-    secure = _export_session(plaintext=False)
+    secure = _export_session(plaintext=False, endpoint="https://collector.example/v1/metrics")
     secure_request = secure.prepare_request(
         requests.Request("POST", "https://collector.example/v1/metrics")
     )
@@ -111,7 +111,7 @@ def test_https_session_can_use_netrc(tmp_path, monkeypatch) -> None:
     netrc.write_text("machine collector.example login user password secret\n", encoding="utf-8")
     netrc.chmod(0o600)
     monkeypatch.setenv("NETRC", str(netrc))
-    session = _export_session(plaintext=False)
+    session = _export_session(plaintext=False, endpoint="https://collector.example/v1/metrics")
     prepared = session.prepare_request(requests.Request("POST", "https://collector.example/v1/metrics"))
     assert prepared.headers["Authorization"].startswith("Basic ")
 
@@ -129,6 +129,26 @@ def test_cross_origin_https_redirect_drops_credentials() -> None:
     response.request = original
     session.rebuild_auth(prepared, response)
     assert "x-api-key" not in prepared.headers
+    assert prepared.headers["Content-Type"] == "application/x-protobuf"
+
+
+def test_later_hop_does_not_restore_netrc_off_the_configured_origin(tmp_path, monkeypatch) -> None:
+    netrc = tmp_path / "netrc"
+    netrc.write_text("machine collector.example login user password secret\n", encoding="utf-8")
+    netrc.chmod(0o600)
+    monkeypatch.setenv("NETRC", str(netrc))
+    session = _export_session(plaintext=False, endpoint="https://collector.example/v1/metrics")
+    original = requests.Request("POST", "https://collector.example:8443/a").prepare()
+    prepared = requests.Request(
+        "POST",
+        "https://collector.example:8443/b",
+        headers={"Content-Type": "application/x-protobuf"},
+    ).prepare()
+    response = requests.Response()
+    response.url = "https://collector.example:8443/a"
+    response.request = original
+    session.rebuild_auth(prepared, response)
+    assert "Authorization" not in prepared.headers
     assert prepared.headers["Content-Type"] == "application/x-protobuf"
 
 

@@ -52,9 +52,15 @@ def _origin(url: str) -> tuple[str, str, int | None]:
 class _NoDowngradeSession(requests.Session):
     """Refuse an https export that redirects onto http.
 
-    A plaintext session does not read netrc. A redirect to another origin
-    drops credential headers. A same-origin redirect keeps them.
+    Credential headers stay on the configured endpoint origin. A later hop
+    is checked against that origin, not the previous hop, so netrc cannot
+    put them back on a different port. A plaintext session does not read netrc.
     """
+
+    def __init__(self, endpoint: str = "") -> None:
+        super().__init__()
+        origin = _origin(endpoint)
+        self._endpoint_origin = origin if origin[1] else None
 
     def rebuild_auth(self, prepared_request, response):  # noqa: ANN001
         new_url = prepared_request.url or ""
@@ -62,14 +68,15 @@ class _NoDowngradeSession(requests.Session):
         if new_url.lower().startswith("http://") and old_url.lower().startswith("https://"):
             raise OtlpSecurityError("refusing to follow an OTLP redirect from https to http")
         super().rebuild_auth(prepared_request, response)
-        if _origin(new_url) != _origin(old_url):
+        allowed = self._endpoint_origin if self._endpoint_origin is not None else _origin(old_url)
+        if _origin(new_url) != allowed:
             for name in list(prepared_request.headers):
                 if name.lower() not in _SAFE_HTTP_HEADERS:
                     del prepared_request.headers[name]
 
 
-def _export_session(*, plaintext: bool) -> _NoDowngradeSession:
-    session = _NoDowngradeSession()
+def _export_session(*, plaintext: bool, endpoint: str) -> _NoDowngradeSession:
+    session = _NoDowngradeSession(endpoint)
     if plaintext:
         session.trust_env = False
     return session
@@ -204,7 +211,7 @@ def start_otlp(
         exporter = HttpExporter(
             endpoint=target,
             timeout=timeout,
-            session=_export_session(plaintext=plaintext),
+            session=_export_session(plaintext=plaintext, endpoint=target),
         )
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 
