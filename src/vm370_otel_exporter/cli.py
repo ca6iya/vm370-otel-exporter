@@ -14,6 +14,7 @@ from vm370_otel_exporter.otel import OtlpSecurityError, start_otlp
 from vm370_otel_exporter.parse import parse_text
 from vm370_otel_exporter.prometheus import render_prometheus
 from vm370_otel_exporter.server import DEFAULT_HOST, DEFAULT_PORT, ListenError, make_server
+from vm370_otel_exporter.source import SnapshotSource
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -60,7 +61,8 @@ def main(argv: list[str] | None = None) -> int:
     except OSError as exc:
         print(f"cannot read CP text: {exc}", file=sys.stderr)
         return 2
-    snapshot = parse_text(text)
+    source = SnapshotSource(parse_text(text), path=_text_path(args.text))
+    snapshot = source.get()
     runtime = None
     if args.otlp:
         try:
@@ -69,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.otlp_protocol,
                 snapshot,
                 insecure=args.otlp_insecure,
+                load_snapshot=source.get,
             )
         except OtlpSecurityError as exc:
             print(str(exc), file=sys.stderr)
@@ -80,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
                 runtime.force_flush()
             return 0
         try:
-            server = make_server(snapshot, args.listen, args.port)
+            server = make_server(source.get, args.listen, args.port)
         except ListenError as exc:
             print(str(exc), file=sys.stderr)
             return 2
@@ -99,3 +102,9 @@ def _read_text(path: str | None) -> str:
             raise OSError("pass --text FILE or pipe CP text on stdin")
         return sys.stdin.read()
     return Path(path).read_text(encoding="utf-8", errors="replace")
+
+
+def _text_path(path: str | None) -> Path | None:
+    if path is None or path == "-":
+        return None
+    return Path(path)

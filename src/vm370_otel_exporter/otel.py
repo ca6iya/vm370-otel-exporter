@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 
@@ -19,6 +19,8 @@ from opentelemetry.sdk.resources import Resource
 from vm370_otel_exporter import __version__
 from vm370_otel_exporter.catalog import CATALOG
 from vm370_otel_exporter.models import Snapshot
+
+SnapshotLoader = Callable[[], Snapshot]
 
 SCOPE_NAME = "vm370-otel-exporter"
 _IDENTITY_KEYS = ("zvm.hypervisor", "zvm.system.name", "zvm.exporter.guest", "host.arch")
@@ -107,16 +109,22 @@ def resource_attributes(snapshot: Snapshot) -> dict[str, str]:
     return attributes
 
 
-def build_provider(snapshot: Snapshot, reader: MetricReader | None = None) -> MeterProvider:
+def build_provider(
+    snapshot: Snapshot,
+    reader: MetricReader | None = None,
+    *,
+    load_snapshot: SnapshotLoader | None = None,
+) -> MeterProvider:
     """Register the catalog on a meter named ``vm370-otel-exporter``."""
 
+    getter: SnapshotLoader = load_snapshot or (lambda: snapshot)
     provider = MeterProvider(
         metric_readers=[reader] if reader is not None else [],
-        resource=Resource(resource_attributes(snapshot)),
+        resource=Resource(resource_attributes(getter())),
     )
     meter = provider.get_meter(SCOPE_NAME, __version__)
     for defn in CATALOG.values():
-        callback = _callback(snapshot, defn.name, defn.type)
+        callback = _callback(getter, defn.name, defn.type)
         if defn.type == "counter":
             meter.create_observable_counter(
                 defn.name,
@@ -189,6 +197,7 @@ def start_otlp(
     insecure: bool = False,
     timeout: float = 10.0,
     export_interval_ms: int = 15000,
+    load_snapshot: SnapshotLoader | None = None,
 ) -> OtelRuntime:
     """Push the snapshot on an OTLP metric reader."""
 
@@ -216,12 +225,12 @@ def start_otlp(
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 
     reader = PeriodicExportingMetricReader(exporter, export_interval_millis=export_interval_ms)
-    return OtelRuntime(build_provider(snapshot, reader))
+    return OtelRuntime(build_provider(snapshot, reader, load_snapshot=load_snapshot))
 
 
-def _callback(snapshot: Snapshot, name: str, instrument_type: str):
+def _callback(get_snapshot: SnapshotLoader, name: str, instrument_type: str):
     def observe(_options: CallbackOptions) -> Iterable[Observation]:
-        for sample in snapshot.samples:
+        for sample in get_snapshot().samples:
             if sample.name != name:
                 continue
             if instrument_type == "counter" and sample.value < 0:

@@ -5,11 +5,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
 from vm370_otel_exporter.models import Snapshot
 from vm370_otel_exporter.prometheus import CONTENT_TYPE, render_prometheus
+
+SnapshotLoader = Callable[[], Snapshot]
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9370
@@ -27,17 +30,22 @@ def normalize_listen(host: str) -> str:
     raise ListenError(f"{host} is not a loopback address; /metrics binds to {DEFAULT_HOST}")
 
 
-def make_server(snapshot: Snapshot, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
+def make_server(
+    snapshot: Snapshot | SnapshotLoader,
+    host: str = DEFAULT_HOST,
+    port: int = DEFAULT_PORT,
+):
     """Bind ``/metrics`` on loopback and return the server without serving."""
 
     bound_host = normalize_listen(host)
+    load: SnapshotLoader = snapshot if callable(snapshot) else (lambda: snapshot)
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
             if urlparse(self.path).path != "/metrics":
                 self.send_error(404)
                 return
-            body = render_prometheus(snapshot)
+            body = render_prometheus(load())
             self.send_response(200)
             self.send_header("Content-Type", CONTENT_TYPE)
             self.send_header("Content-Length", str(len(body)))

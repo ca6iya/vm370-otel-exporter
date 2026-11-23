@@ -1,0 +1,38 @@
+# Dockhand Git stack compose. Do not set top-level `name:`.
+# Do not use `build:` here (Dockhand cannot see host build contexts).
+# Do not use `env_file: .env` (Git deploy copies the clone; secrets ride in
+# the compose process env; non-secrets land in .env.dockhand).
+# Do not set `container_name:`.
+#
+# network_mode: host keeps /metrics on 127.0.0.1:9370 (the exporter refuses
+# any other bind). Optional OTLP targets the host collector on :4318.
+
+services:
+  exporter:
+    image: ghcr.io/ca6iya/vm370-otel-exporter:${VM370_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TZ: ${TZ:-America/Puerto_Rico}
+      VM370_TEXT: ${VM370_TEXT:-/data/cp.txt}
+      VM370_OTLP: ${VM370_OTLP:-}
+      VM370_OTLP_INSECURE: ${VM370_OTLP_INSECURE:-0}
+    volumes:
+      - cp_text:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9370/metrics', timeout=2)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  cp_text:
+    name: vm370_cp_text

@@ -1,6 +1,8 @@
 # Copyright 2026 VM/370 OTel Exporter contributors
 # SPDX-License-Identifier: Apache-2.0
 
+from pathlib import Path
+
 from tests.conftest import one
 from vm370_otel_exporter.parse import parse_text
 
@@ -208,3 +210,16 @@ def test_every_fixture_name_stays_in_the_vm370_prefix(load_fixture) -> None:
     assert snapshot.resource["zvm.system.name"] == "VM/370"
     assert snapshot.resource["zvm.exporter.guest"] == "CMSUSER"
     assert "host.arch" not in snapshot.resource
+
+
+def test_playground_sample_matches_the_contract() -> None:
+    sample = Path(__file__).resolve().parents[1] / "examples" / "cp-sample.txt"
+    snapshot = parse_text(sample.read_text(encoding="utf-8"))
+    assert one(snapshot, "zvm.vm370.cpu.utilization").value == 0.02
+    assert one(snapshot, "zvm.vm370.storage.utilization").value == 0.12
+    assert one(snapshot, "zvm.vm370.paging.reads", **{"zvm.vm370.userid": "WAKEUP"}).value == 34
+    assert one(snapshot, "zvm.vm370.guest.info", **{"zvm.vm370.userid": "WAKEUP"}).value == 1
+    assert one(snapshot, "zvm.vm370.storage.size").value == 16384 * 1024
+    assert snapshot.resource["zvm.hypervisor"] == "VM/370"
+    assert all(sample.name.startswith("zvm.vm370.") for sample in snapshot.samples)
+    assert all("steal" not in sample.name for sample in snapshot.samples)
