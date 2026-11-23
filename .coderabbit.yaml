@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit reviews non-draft pull requests to the default branch.
+language: en-US
+reviews:
+  profile: chill
+  poem: false
+  review_status: true
+  review_progress: true
+  commit_status: true
+  fail_commit_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 0
+  path_filters:
+    - "**"
+  path_instructions:
+    - path: "src/**"
+      instructions: |
+        This exporter parses VM/370 R6 CP text. It is not a z/VM or Feilong exporter.
+        Every metric name starts with zvm.vm370. Do not add zvm.guest.cpu.time,
+        zvm.paging.allocated, zvm.paging.rate, zvm.system.cpu.utilization, zvm.linux.*,
+        or any Feilong series.
+        STORAGE-nnn% is zvm.vm370.storage.utilization, real storage as a ratio.
+        Do not name that series steal.
+        READS= and WRITES= are cumulative page counters, not a per-second rate.
+        DISK- and DRUM- are gauges of pages allocated when INDICATE runs.
+        A schemeless OTLP endpoint uses TLS. Do not send credential headers
+        over plaintext, and do not follow an https redirect onto http.
+        RATIO is the printed factor, not a rate.
+        VTIME and TTIME become seconds only when the field is mmm:ss.
+        IPL sizes are gauges in bytes, K times 1024.
+        Identity is only zvm.hypervisor and zvm.system.name from HYPERVISOR=, and
+        zvm.exporter.guest from VM_USERID=. Do not copy a z/VM 7.3 or CPC 3906
+        sysinfo fixture. Do not set host.arch unless the input has a host.arch= line.
+        Do not read /proc, hypfs, monreader, or vmcp, and do not send Hercules or
+        shell commands. /metrics stays on 127.0.0.1.
+    - path: "tests/**"
+      instructions: |
+        A test must fail if a metric name does not start with zvm.vm370., if the
+        storage percent is named steal, or if READS is a rate. Fixtures are CP
+        text. Tests must not require Hercules. Do not treat a z/VM sysinfo file
+        as identity for this exporter.
+    - path: "**/*.md"
+      instructions: |
+        Do not claim these conversions were run on a live VM/370. They are a
+        contract to confirm. zvm.linux.* stays in zvm-agent as a separate OTLP
+        scope. Do not document Feilong, vmcp, or /proc as inputs of this process.

@@ -1,0 +1,9 @@
+this line matches nothing
+CPU 2 percent is not a VM/370 field
+READS 34 per second
+steal_pct=12
+z/VM 7.3.0
+CPC type 3906
+VTIME=1:02:03
+TTIME=00:00:00
+host.arch s390x
