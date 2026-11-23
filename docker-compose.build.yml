@@ -1,0 +1,6 @@
+# Local smoke overlay. Git stack compose stays image-only.
+services:
+  exporter:
+    build: .
+    image: ghcr.io/ca6iya/vm370-otel-exporter:local
+    pull_policy: never

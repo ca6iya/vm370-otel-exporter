@@ -86,8 +86,14 @@ python -m vm370_otel_exporter --text - < cp.txt
 python -m vm370_otel_exporter --catalog
 ```
 
+When `--text` is a file, `/metrics` and OTLP callbacks re-read that file on
+each scrape. Stdin is parsed once. The process still does not send Hercules
+or shell commands; [zvm_play](https://github.com/ca6iya/zvm_play)
+`./capture-cp-text.sh` writes the file.
+
 The server binds `127.0.0.1:9370` and answers `GET /metrics`. Any other
-listen address is rejected. Pass `--otlp http://127.0.0.1:4318` to push
+listen address is rejected. Put the container on the host network so that
+loopback bind is the host loopback. Pass `--otlp http://127.0.0.1:4318` to push
 OTLP/HTTP to a local collector. A schemeless address uses TLS. `--otlp-protocol grpc`
 selects OTLP/gRPC. `--otlp-insecure` selects plaintext and is refused when
 `OTEL_EXPORTER_OTLP_HEADERS` or `OTEL_EXPORTER_OTLP_METRICS_HEADERS` is set.
@@ -102,6 +108,36 @@ scrape_configs:
   - job_name: vm370
     static_configs:
       - targets: ["127.0.0.1:9370"]
+```
+
+## Docker / Dockhand Git stack
+
+`docker-compose.yml` is Git-stack ready: image only, no `build:`, no
+top-level `name:`, no `container_name:`, no `env_file`. The image is
+`ghcr.io/ca6iya/vm370-otel-exporter:latest` (`linux/amd64`). Compose uses
+`network_mode: host` so `/metrics` stays on `127.0.0.1:9370`. An empty
+`vm370_cp_text` volume is seeded from `examples/cp-sample.txt`.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --wait
+curl -sS http://127.0.0.1:9370/metrics
+```
+
+Optional env (interpolated by Dockhand Git deploy):
+
+- `VM370_TEXT` default `/data/cp.txt`
+- `VM370_OTLP` empty means Prometheus only. `http://127.0.0.1:4318` plus
+  `VM370_OTLP_INSECURE=1` pushes plaintext OTLP to a host collector.
+- `VM370_TAG` image tag, default `latest`
+
+Copy a live playground snapshot into the volume after
+`./capture-cp-text.sh` on zvm_play. The next scrape re-parses the file:
+
+```bash
+docker run --rm \
+  -v vm370_cp_text:/data \
+  -v "$PWD/monitor/cp-snapshot.txt:/src/cp.txt:ro" \
+  alpine cp /src/cp.txt /data/cp.txt
 ```
 
 ## Development

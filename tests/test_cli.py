@@ -5,7 +5,6 @@ import sys
 from io import StringIO
 
 from tests.conftest import FIXTURES
-
 from vm370_otel_exporter.cli import main
 
 
