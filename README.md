@@ -91,7 +91,8 @@ listen address is rejected. Pass `--otlp http://127.0.0.1:4318` to push
 OTLP/HTTP to a local collector. A schemeless address uses TLS. `--otlp-protocol grpc`
 selects OTLP/gRPC. `--otlp-insecure` selects plaintext and is refused when
 `OTEL_EXPORTER_OTLP_HEADERS` or `OTEL_EXPORTER_OTLP_METRICS_HEADERS` is set.
-An https export does not follow a redirect onto http. Omit `--otlp` and the
+Plaintext HTTP does not read `~/.netrc`. An https export does not follow a
+redirect onto http, and a redirect to another origin drops credential headers. Omit `--otlp` and the
 process does not open an OTLP connection.
 
 Prometheus scrape:

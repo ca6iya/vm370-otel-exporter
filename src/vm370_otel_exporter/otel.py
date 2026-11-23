@@ -35,19 +35,44 @@ class OtlpSecurityError(ValueError):
     """The OTLP target would send credentials in cleartext."""
 
 
+def _origin(url: str) -> tuple[str, str, int | None]:
+    parts = urlsplit(url)
+    scheme = parts.scheme.lower()
+    if parts.port is not None:
+        port = parts.port
+    elif scheme == "https":
+        port = 443
+    elif scheme == "http":
+        port = 80
+    else:
+        port = None
+    return scheme, (parts.hostname or "").lower(), port
+
+
 class _NoDowngradeSession(requests.Session):
-    """Refuse an https export that redirects onto http."""
+    """Refuse an https export that redirects onto http.
+
+    A plaintext session does not read netrc. A redirect to another origin
+    drops credential headers. A same-origin redirect keeps them.
+    """
 
     def rebuild_auth(self, prepared_request, response):  # noqa: ANN001
-        new_url = (prepared_request.url or "").lower()
-        old_url = (getattr(response, "url", "") or "").lower()
-        if new_url.startswith("http://") and old_url.startswith("https://"):
+        new_url = prepared_request.url or ""
+        old_url = getattr(response, "url", "") or ""
+        if new_url.lower().startswith("http://") and old_url.lower().startswith("https://"):
             raise OtlpSecurityError("refusing to follow an OTLP redirect from https to http")
         super().rebuild_auth(prepared_request, response)
-        if new_url.startswith("http://"):
+        if _origin(new_url) != _origin(old_url):
             for name in list(prepared_request.headers):
                 if name.lower() not in _SAFE_HTTP_HEADERS:
                     del prepared_request.headers[name]
+
+
+def _export_session(*, plaintext: bool) -> _NoDowngradeSession:
+    session = _NoDowngradeSession()
+    if plaintext:
+        session.trust_env = False
+    return session
 
 
 @dataclass
@@ -179,7 +204,7 @@ def start_otlp(
         exporter = HttpExporter(
             endpoint=target,
             timeout=timeout,
-            session=_NoDowngradeSession(),
+            session=_export_session(plaintext=plaintext),
         )
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 

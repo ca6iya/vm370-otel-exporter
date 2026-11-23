@@ -1,11 +1,25 @@
 # Copyright 2026 VM/370 OTel Exporter contributors
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
 import requests
 
 from tests.conftest import FIXTURES
 from vm370_otel_exporter.cli import main
-from vm370_otel_exporter.otel import OtlpSecurityError, _NoDowngradeSession, prepare_otlp_export
+from vm370_otel_exporter.otel import (
+    OtlpSecurityError,
+    _export_session,
+    _NoDowngradeSession,
+    prepare_otlp_export,
+)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _clear_inherited_otlp_headers():
+    with pytest.MonkeyPatch.context() as patch:
+        patch.delenv("OTEL_EXPORTER_OTLP_HEADERS", raising=False)
+        patch.delenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", raising=False)
+        yield
 
 
 def test_schemeless_endpoint_uses_tls() -> None:
@@ -73,6 +87,65 @@ def test_https_redirect_to_http_is_refused() -> None:
     else:
         raise AssertionError("https to http redirect was accepted")
     assert prepared.headers["x-api-key"] == "secret"
+
+
+def test_plaintext_session_ignores_netrc(tmp_path, monkeypatch) -> None:
+    netrc = tmp_path / "netrc"
+    netrc.write_text("machine 127.0.0.1 login user password secret\n", encoding="utf-8")
+    netrc.chmod(0o600)
+    monkeypatch.setenv("NETRC", str(netrc))
+    session = _export_session(plaintext=True)
+    prepared = session.prepare_request(requests.Request("POST", "http://127.0.0.1:4318/v1/metrics"))
+    assert session.trust_env is False
+    assert "Authorization" not in prepared.headers
+    secure = _export_session(plaintext=False)
+    secure_request = secure.prepare_request(
+        requests.Request("POST", "https://collector.example/v1/metrics")
+    )
+    assert secure.trust_env is True
+    assert "Authorization" not in secure_request.headers
+
+
+def test_https_session_can_use_netrc(tmp_path, monkeypatch) -> None:
+    netrc = tmp_path / "netrc"
+    netrc.write_text("machine collector.example login user password secret\n", encoding="utf-8")
+    netrc.chmod(0o600)
+    monkeypatch.setenv("NETRC", str(netrc))
+    session = _export_session(plaintext=False)
+    prepared = session.prepare_request(requests.Request("POST", "https://collector.example/v1/metrics"))
+    assert prepared.headers["Authorization"].startswith("Basic ")
+
+
+def test_cross_origin_https_redirect_drops_credentials() -> None:
+    session = _NoDowngradeSession()
+    original = requests.Request("POST", "https://collector.example/v1/metrics").prepare()
+    prepared = requests.Request(
+        "POST",
+        "https://other.example/v1/metrics",
+        headers={"x-api-key": "secret", "Content-Type": "application/x-protobuf"},
+    ).prepare()
+    response = requests.Response()
+    response.url = "https://collector.example/v1/metrics"
+    response.request = original
+    session.rebuild_auth(prepared, response)
+    assert "x-api-key" not in prepared.headers
+    assert prepared.headers["Content-Type"] == "application/x-protobuf"
+
+
+def test_same_origin_https_redirect_keeps_credentials() -> None:
+    session = _NoDowngradeSession()
+    original = requests.Request("POST", "https://collector.example/v1/metrics").prepare()
+    prepared = requests.Request(
+        "POST",
+        "https://collector.example/v1/metrics/extra",
+        headers={"x-api-key": "secret", "Content-Type": "application/x-protobuf"},
+    ).prepare()
+    response = requests.Response()
+    response.url = "https://collector.example/v1/metrics"
+    response.request = original
+    session.rebuild_auth(prepared, response)
+    assert prepared.headers["x-api-key"] == "secret"
+    assert prepared.headers["Content-Type"] == "application/x-protobuf"
 
 
 def test_http_redirect_drops_credential_headers() -> None:
