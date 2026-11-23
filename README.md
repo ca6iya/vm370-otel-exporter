@@ -110,6 +110,18 @@ scrape_configs:
       - targets: ["127.0.0.1:9370"]
 ```
 
+On this homelab the OTLP path already lands series on NAS Prometheus
+(`192.168.1.181:9090`) as `zvm_vm370_*` with `job="vm370-otel-exporter"`.
+OpenTelemetry adds a `_ratio` suffix on unit-1 gauges (`cpu_utilization_ratio`).
+Do not import the z/VM dashboards from `zvm-otel-exporter` — those use Feilong
+names and steal.
+
+Grafana (`http://192.168.1.181:3001`): Dashboards → Import → upload
+`examples/grafana/vm370-playground.json` and pick the Prometheus datasource.
+The top-left **Exporter feeding** panel is `1`/`up` when
+`zvm_vm370_cpu_utilization_ratio` is present. STORAGE is percent unit 0–1,
+not steal. READS is the cumulative counter.
+
 ## Docker / Dockhand Git stack
 
 `docker-compose.yml` is Git-stack ready: image only, no `build:`, no

@@ -1,0 +1,232 @@
+{
+  "uid": "vm370-playground",
+  "title": "VM/370 playground",
+  "description": "Live VM/370 Community Edition CP text from vm370-otel-exporter. STORAGE is real storage, not steal. READS/WRITES are cumulative page counters.",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["vm370", "hercules", "mainframe"],
+  "timezone": "browser",
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "editable": true,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "links": [],
+  "annotations": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "hide": 0,
+        "current": {}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Exporter feeding",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "down", "color": "red" } } },
+            { "type": "range", "options": { "from": 1, "to": 999, "result": { "text": "up", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(zvm_vm370_cpu_utilization_ratio{job=\"vm370-otel-exporter\"}) or vector(0)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "CPU (INDICATE LOAD)",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1, "decimals": 1 },
+        "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "refId": "A", "expr": "zvm_vm370_cpu_utilization_ratio{job=\"vm370-otel-exporter\"}" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Real storage in use",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1, "decimals": 1 },
+        "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "refId": "A", "expr": "zvm_vm370_storage_utilization_ratio{job=\"vm370-otel-exporter\"}" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Paging ratio",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "decimals": 2, "min": 0 }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "refId": "A", "expr": "zvm_vm370_paging_ratio{job=\"vm370-otel-exporter\"}" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Logged-on guests",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "decimals": 0, "min": 0 }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "refId": "A", "expr": "count(zvm_vm370_guest_info_ratio{job=\"vm370-otel-exporter\"})" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "IPL storage size",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "decimals": 0 }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "refId": "A", "expr": "zvm_vm370_storage_size_bytes{job=\"vm370-otel-exporter\"}" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "CPU and APU utilization",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+        },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "zvm_vm370_cpu_utilization_ratio{job=\"vm370-otel-exporter\"}", "legendFormat": "CPU" },
+        { "refId": "B", "expr": "zvm_vm370_apu_utilization_ratio{job=\"vm370-otel-exporter\"}", "legendFormat": "APU" }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Real storage utilization (not steal)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+        },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "zvm_vm370_storage_utilization_ratio{job=\"vm370-otel-exporter\"}", "legendFormat": "storage" }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "SRM queue depth (Q1 / Q2)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "min": 0, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 } },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "zvm_vm370_queue_depth{job=\"vm370-otel-exporter\"}", "legendFormat": "{{zvm_vm370_queue}}" }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Resident pages by userid",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "min": 0, "custom": { "drawStyle": "line", "fillOpacity": 8, "lineWidth": 2 } },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "zvm_vm370_guest_pages_resident{job=\"vm370-otel-exporter\"}", "legendFormat": "{{zvm_vm370_userid}}" }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Paging READS (cumulative pages, not a rate)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "min": 0, "custom": { "drawStyle": "line", "fillOpacity": 8, "lineWidth": 2 } },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "zvm_vm370_paging_reads_total{job=\"vm370-otel-exporter\"}", "legendFormat": "{{zvm_vm370_userid}}" }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "SIO by userid (cumulative)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "min": 0, "custom": { "drawStyle": "line", "fillOpacity": 8, "lineWidth": 2 } },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "zvm_vm370_guest_sio_total{job=\"vm370-otel-exporter\"}", "legendFormat": "{{zvm_vm370_userid}}" }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "QUERY NAMES",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "options": { "showHeader": true },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "zvm_vm370_guest_info_ratio{job=\"vm370-otel-exporter\"}",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    }
+  ]
+}
