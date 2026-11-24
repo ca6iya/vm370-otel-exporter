@@ -110,13 +110,13 @@ scrape_configs:
       - targets: ["127.0.0.1:9370"]
 ```
 
-On this homelab the OTLP path already lands series on NAS Prometheus
-(`192.168.1.181:9090`) as `zvm_vm370_*` with `job="vm370-otel-exporter"`.
+On an OpenTelemetry → Prometheus pipeline, series land on Prometheus
+(`http://localhost:9090`) as `zvm_vm370_*` with `job="vm370-otel-exporter"`.
 OpenTelemetry adds a `_ratio` suffix on unit-1 gauges (`cpu_utilization_ratio`).
 Do not import the z/VM dashboards from `zvm-otel-exporter` — those use Feilong
 names and steal.
 
-Grafana (`http://192.168.1.181:3001`): import
+Grafana (`http://localhost:3000`): import
 `examples/grafana/vm370-playground.json` (uid `vm370-playground`).
 Every query uses `job="vm370-otel-exporter"` so the collector re-export
 (`job="otel-collector-metrics"`) does not draw a second CPU line. STORAGE is

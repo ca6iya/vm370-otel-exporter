@@ -2,7 +2,7 @@ name: Publish Docker Image
 
 # Publish must not depend on `push` to main alone. GitHub UI merges can land
 # with 0 Actions runs. Default pull_request types miss the merge; `closed` +
-# merged is the backup. linux/amd64 only (ms02 is amd64).
+# merged is the backup.
 on:
   push:
     branches:

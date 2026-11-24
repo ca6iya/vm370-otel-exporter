@@ -1,4 +1,4 @@
-# linux/amd64 only. ms02 is amd64; do not matrix arm64 for this Python image.
+# Multi-arch image. Build for the host architecture where Dockhand deploys.
 FROM python:3.12-slim-bookworm
 
 WORKDIR /app
